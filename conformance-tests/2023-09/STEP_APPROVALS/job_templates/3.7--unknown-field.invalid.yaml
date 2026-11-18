@@ -1,0 +1,10 @@
+# Template Schemas §3.7: unknown fields in <StepApproval> are rejected.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    notAField: true

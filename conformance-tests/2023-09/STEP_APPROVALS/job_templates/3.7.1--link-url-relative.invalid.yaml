@@ -1,0 +1,12 @@
+# Template Schemas §3.7.1: a url must be absolute.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    links:
+    - label: Relative
+      url: /shots/sh010

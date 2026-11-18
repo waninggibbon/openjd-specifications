@@ -88,6 +88,8 @@ name: MyJob
 
 Some tests (like `redaction-without-extension.test.yaml` in `REDACTED_ENV_VARS/jobs/`) intentionally omit the `extensions` field to verify behavior when extension syntax is used without enabling the extension.
 
+`STEP_APPROVALS/` has template validation tests only. The job execution test format can't express an approval decision yet, so there are no `STEP_APPROVALS/jobs/` tests.
+
 ### Job Execution Test Format
 
 Job execution tests use a unified single-file format (`.test.yaml`):

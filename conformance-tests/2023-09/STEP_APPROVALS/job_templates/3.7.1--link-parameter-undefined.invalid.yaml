@@ -1,0 +1,12 @@
+# Template Schemas §3.7.1: parameter must name a Job Parameter that is defined.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    links:
+    - label: Missing
+      parameter: NotDefined

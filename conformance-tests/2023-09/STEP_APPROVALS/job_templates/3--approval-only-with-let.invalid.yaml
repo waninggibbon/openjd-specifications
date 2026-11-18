@@ -1,0 +1,12 @@
+# Template Schemas §3: an approval-only Step must not have let, even with EXPR listed.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+- EXPR
+name: TestJob
+steps:
+- name: Review
+  let:
+  - x = 1
+  approval:
+    message: Approve?

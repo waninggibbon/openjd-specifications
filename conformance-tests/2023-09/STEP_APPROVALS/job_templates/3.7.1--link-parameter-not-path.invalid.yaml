@@ -1,0 +1,16 @@
+# Template Schemas §3.7.1: parameter must name a PATH-type Job Parameter.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+parameterDefinitions:
+- name: ShotName
+  type: STRING
+  default: sh010
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    links:
+    - label: Name
+      parameter: ShotName

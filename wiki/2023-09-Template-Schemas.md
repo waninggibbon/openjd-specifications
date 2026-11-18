@@ -54,7 +54,8 @@ Where:
          [REDACTED_ENV_VARS](https://github.com/OpenJobDescription/openjd-specifications/blob/mainline/rfcs/0003-redacted-env-vars.md),
          [FEATURE_BUNDLE_1](https://github.com/OpenJobDescription/openjd-specifications/blob/mainline/rfcs/0004-enhanced-limits-and-capabilities.md),
          [EXPR](https://github.com/OpenJobDescription/openjd-specifications/blob/mainline/rfcs/0005-expression-language.md),
-         [WRAP_ACTIONS](https://github.com/OpenJobDescription/openjd-specifications/blob/mainline/rfcs/0008-environment-wrap-actions.md)
+         [WRAP_ACTIONS](https://github.com/OpenJobDescription/openjd-specifications/blob/mainline/rfcs/0008-environment-wrap-actions.md),
+         [STEP_APPROVALS](https://github.com/OpenJobDescription/openjd-specifications/blob/mainline/rfcs/0200-step-approvals.md)
 4. *name* — The name to give to a Job that is created from the template. See: [&lt;JobName&gt;](#111-jobname).
 5. *description* — A description to apply to all Jobs that are created from the template. It has no functional purpose,
    but may appear in UI elements. See: [&lt;Description&gt;](#72-description).
@@ -900,10 +901,11 @@ name: <StepName>
 description: <Description> # @optional
 let: <LetBindings> # @optional @extension EXPR
 dependencies: [ <StepDependency>, ... ] # @optional
+approval: <StepApproval> # @optional @extension STEP_APPROVALS
 stepEnvironments: [ <Environment>, ... ] # @optional
 hostRequirements: <HostRequirements> # @optional
 parameterSpace: <StepParameterSpaceDefinition> # @optional
-script: <StepScript>
+script: <StepScript> # @optional only when approval is provided
 ```
 
 Where:
@@ -919,7 +921,11 @@ Where:
     * Minimum number of elements: If provided, then this list must contain at least one element.
     * Maximum number of elements: There is no maximum defined, though implementations may choose to constrain the number of
     dependencies.
-5. *stepEnvironments* — An ordered list of the environments that are required to run Tasks in this Step.
+5. *approval* — Requires that a person approve the Step before any of its Tasks may be scheduled. The render management
+   system opens an approval request when the Step would first become eligible for scheduling, and the Step's Tasks may be
+   scheduled only while an approval is in effect. Available only when using the `STEP_APPROVALS` extension.
+   See: [&lt;StepApproval&gt;](#37-stepapproval) and [Step Approvals](How-Jobs-Are-Run#step-approvals).
+6. *stepEnvironments* — An ordered list of the environments that are required to run Tasks in this Step.
   These are entered in the order provided at the start of every Session for Tasks in the Step, and exited in the reverse
   order at the end of those Sessions.
   See: [&lt;Environment&gt;](#4-environment).
@@ -930,12 +936,23 @@ Where:
     * Note: The scope of a Step Environment's `name` is the Step that defines it. Different Steps may each define a
       Step Environment with the same `name`; a Session only ever contains the Step Environments of a single Step, so
       these names never collide.
-6. *hostRequirements* — Describes the requirements on Worker host's capabilities that must be satisfied for the Task(s) of
+7. *hostRequirements* — Describes the requirements on Worker host's capabilities that must be satisfied for the Task(s) of
    the Step to be scheduled to the host. See: [&lt;HostRequirements&gt;](#33-hostrequirements).
-7. *parameterSpace* — Defines the parameterization of the Step's action; the available parameters, the values that they
+8. *parameterSpace* — Defines the parameterization of the Step's action; the available parameters, the values that they
    take on, and how those parameters' values are combined to produce the Tasks of the Step. Absent this property the Step
    is run a single time.
-8. *script* — The action that is taken by this Step's Tasks when they are run on a Worker host.
+9. *script* — The action that is taken by this Step's Tasks when they are run on a Worker host. Required unless
+   *approval* is provided. With the `FEATURE_BUNDLE_1` extension, a [&lt;SimpleAction&gt;](#8-simpleaction) given on
+   the Step takes the place of *script*.
+
+A Step that provides *approval* and provides neither *script* nor a [&lt;SimpleAction&gt;](#8-simpleaction) is an
+***approval-only Step***. It runs nothing on a
+Worker host, has no Session, and fully completes successfully only when it is approved. With the `STEP_APPROVALS`
+extension, the following constraints apply:
+
+1. If *approval* is not provided, then *script*, or a [&lt;SimpleAction&gt;](#8-simpleaction), must be provided.
+2. An approval-only Step must not provide *stepEnvironments*, *hostRequirements*, *parameterSpace*, or *let*. These
+   properties describe how the Step's Tasks run, and an approval-only Step runs nothing.
 
 ### 3.1. `<StepName>`
 
@@ -960,6 +977,10 @@ Where:
 
 1. *dependsOn* — Provides the name of another step in the same job upon which this step depends. The Task(s) of this Step
    may be scheduled only when the depended-upon Step has fully completed successfully.
+    * Note: With the `STEP_APPROVALS` extension, a depended-upon Step that provides an *approval* has fully completed
+      successfully only if its Tasks ran while an approval was in effect, and an approval-only Step has fully completed
+      successfully only once it is approved. A rejected or expired approval means the Step does not fully complete
+      successfully. See: [Step Approvals](How-Jobs-Are-Run#step-approvals).
 
 ### 3.3. `<HostRequirements>`
 
@@ -1608,6 +1629,97 @@ Step Template (see [7.3.1](#731-value-references)), so it is available in the St
 `<EnvironmentScript>.let`, which may also appear in a Job-level environment or a standalone environment template where
 no enclosing Step exists.
 
+### 3.7. `<StepApproval>`
+
+This object is only available with the extension `STEP_APPROVALS`.
+
+A `<StepApproval>` requires that a person approve a Step before any of its Tasks may be scheduled. The template declares
+*that* a decision is needed and *what the approver sees*. The render management system decides *who* may decide, and
+how. See [Step Approvals](How-Jobs-Are-Run#step-approvals) for when an approval request opens, what each decision does,
+and when a decision stops being in effect.
+
+A `<StepApproval>` is the object:
+
+```yaml
+message: <ApprovalMessage> # @fmtstring
+links: [ <ApprovalLink>, ... ] # @optional
+expiresAfterSeconds: <integer> # @optional
+onReject: "FAIL" # @optional
+```
+
+Where:
+
+1. *message* — Text that the render management system shows to the approver. It should say what is being approved and
+   what to check before approving. See: [&lt;ApprovalMessage&gt;](#371-approvalmessage).
+2. *links* — A list of links that the render management system shows to the approver alongside the message. For
+   example, the location of output that the approver should review. See: [&lt;ApprovalLink&gt;](#372-approvallink).
+    * Minimum number of elements: If provided, then this list must contain at least one element.
+    * Maximum number of elements: 10.
+3. *expiresAfterSeconds* — The number of seconds after the approval request opens at which a request that is still
+   waiting for a decision expires. Expiry never approves the Step. If not provided, the template sets no expiry,
+   though the render management system may apply its own.
+    * Minimum: 60.
+    * Maximum: 2592000 (30 days).
+4. *onReject* — What happens when the approval request is rejected or expires. The only allowed value is `FAIL`, which is
+   also the default: the Step does not fully complete successfully, none of its Tasks are run, and the Steps that depend
+   on it are never scheduled. This property is reserved so that a later revision of the specification can add other
+   outcomes.
+
+#### 3.7.1. `<ApprovalMessage>`
+
+A [Format String](#73-format-strings) whose resolved value is subject to the following constraints:
+
+1. Allowable characters:
+   * Any unicode character except those in the Cc unicode character category.
+   * Additionally: newline, carriage return, and horizontal tab characters.
+2. Minimum length: 1 character.
+3. Maximum length: 2048 characters.
+
+The length constraints apply to the resolved value.
+
+#### 3.7.2. `<ApprovalLink>`
+
+An `<ApprovalLink>` is the object:
+
+```yaml
+label: <ApprovalLinkLabel>
+url: <FormatString> # @fmtstring @incompatible parameter
+parameter: <Identifier> # @incompatible url
+subpath: <FormatString> # @optional @fmtstring @incompatible url
+```
+
+Where:
+
+1. *label* — The text that the render management system shows for the link. A string subject to the following
+   constraints:
+    1. Allowed characters: Any unicode character except those in the Cc unicode character category.
+    2. Minimum length: 1 character.
+    3. Maximum length: 64 characters.
+2. *url* — A Format String whose resolved value is the link's target. After resolution, it must be an absolute URI whose
+   scheme is `http` or `https`.
+3. *parameter* — The name of a Job Parameter of type `PATH`, defined in the same Job Template, whose value is the link's
+   target. See: [&lt;Identifier&gt;](#71-identifier). The value is shown as it was submitted. Path mapping rules are
+   not applied to it, because the approver's host has no relation to any Worker host.
+4. *subpath* — A Format String whose resolved value is a relative path appended to the value of *parameter*. After
+   resolution, it must not be an absolute path and must not contain a `..` path segment.
+
+Exactly one of *url* or *parameter* must be provided.
+
+The render management system must treat link targets as content supplied by the template author, and should show the
+approver the full target of a link rather than only its label.
+
+#### 3.7.3. Format String Scope
+
+The Format Strings in a `<StepApproval>` are resolved at job creation, not on a Worker host. The values available to
+them are:
+
+1. `RawParam.*` — Values of the Job Parameters.
+2. `Param.*` — Values of the Job Parameters of all types except `PATH`. As elsewhere outside an Environment or
+   `<StepScript>`, `PATH` parameter values are available only through `RawParam.*`.
+3. `Job.Name` and `Step.Name` — Available with the `EXPR` extension.
+
+`let` bindings from the enclosing `<StepTemplate>` are not available in a `<StepApproval>`.
+
 ## 4. `<Environment>`
 
 The Environment is a mechanism provided in this specification to enable users to amortize expensive, or time-consuming,
@@ -2135,7 +2247,7 @@ specification for the extended grammar, type system, and evaluation semantics.
 |`Env.File.<name>`|The filesystem location to which the Environment Attachment with key `<name>` has been written.|Available within the Environment Script Actions and Embedded Files.|
 |`Session.WorkingDirectory`|The agent is expected to create a local temporary scratch directory for the duration of a Session. This builtin provides the location of that temporary directory. This is the working directory that the Worker Agent uses when running the task.|This is available within all Environment Script Actions & Embedded Files, and all Step Script Actions and Embedded Files.|
 |`Job.Name`|The resolved name of the Job. This is a `string` type. Requires the `EXPR` extension.|Available in every Format String in the Job Template, except the `name` field of the Job Template itself.|
-|`Step.Name`|The name of the current Step. This is a `string` type. Requires the `EXPR` extension.|Available within the Step Template scope: `stepEnvironments`, `hostRequirements`, `parameterSpace`, and `script`.|
+|`Step.Name`|The name of the current Step. This is a `string` type. Requires the `EXPR` extension.|Available within the Step Template scope: `stepEnvironments`, `hostRequirements`, `parameterSpace`, `script`, and `approval` (with the `STEP_APPROVALS` extension).|
 |`Session.HasPathMappingRules`|This value can be used to determine whether path mapping rules are available to the Session. Without the `EXPR` extension, it is string valued, with values "true" or "false". With the `EXPR` extension enabled, it is a `bool` type. "true"/`True` means that the path mapping JSON contains path mapping rules. "false"/`False` means that the contents of the path mapping JSON are the empty object.|This is available within all Environment Script Actions & Embedded Files, and all Step Script Actions and Embedded Files.|
 |`Session.PathMappingRulesFile`|This is a string whose value is the location of a JSON file on the worker node's local disk that contains the path mapping rule substitutions for the Session.|This is available within all Environment Script Actions & Embedded Files, and all Step Script Actions and Embedded Files.|
 |`<name>` (let binding)|Names bound by `let` in `<StepTemplate>`, `<StepScript>`, `<SimpleAction>`, or `<EnvironmentScript>`. Names must start with a lowercase letter or underscore (see `<UserIdentifier>`). The type is determined by the expression. Available with the `EXPR` extension.|See [Let Binding Scope Summary](#362-let-binding-scope-summary) for detailed scoping rules.|

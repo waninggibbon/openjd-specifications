@@ -1,0 +1,10 @@
+# Template Schemas §3.7: expiresAfterSeconds maximum is 2592000 (30 days).
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    expiresAfterSeconds: 2592000
