@@ -1,0 +1,12 @@
+# Template Schemas §3 and §3.7: with FEATURE_BUNDLE_1, a simple action can take the place of script in a Step with an approval.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+- FEATURE_BUNDLE_1
+name: TestJob
+steps:
+- name: Step1
+  approval:
+    message: Approve?
+  bash:
+    script: echo hello

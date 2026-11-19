@@ -1,0 +1,8 @@
+# Template Schemas §3: script is optional only when approval is provided.
+# Listing STEP_APPROVALS doesn't make script optional on its own.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Step1

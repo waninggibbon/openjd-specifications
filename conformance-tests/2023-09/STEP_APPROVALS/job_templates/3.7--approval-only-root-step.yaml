@@ -1,0 +1,19 @@
+# Template Schemas §3 and §3.7: an approval-only Step may have no dependencies.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: LicenseCheck
+  approval:
+    message: Confirm the asset license before this Job runs.
+- name: Work
+  dependencies:
+  - dependsOn: LicenseCheck
+  script:
+    actions:
+      onRun:
+        command: python
+        args:
+        - "-c"
+        - "print()"

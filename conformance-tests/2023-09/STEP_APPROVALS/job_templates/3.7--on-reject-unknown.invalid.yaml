@@ -1,0 +1,10 @@
+# Template Schemas §3.7: FAIL is the only allowed value of onReject.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    onReject: SKIP_DEPENDENTS

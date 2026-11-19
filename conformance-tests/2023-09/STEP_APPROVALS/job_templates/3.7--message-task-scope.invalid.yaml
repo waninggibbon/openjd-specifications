@@ -1,0 +1,9 @@
+# Template Schemas §3.7: Task.* values are not in scope in message, which is resolved when the Job is created.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: "Frame {{Task.Param.Frame}}"

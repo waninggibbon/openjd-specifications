@@ -1,0 +1,31 @@
+# Template Schemas §3.7 and §3.7.1: every <StepApproval> field, with url links and a PATH parameter link.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+parameterDefinitions:
+- name: OutputDir
+  type: PATH
+  objectType: DIRECTORY
+  dataFlow: OUT
+  default: /mnt/out
+- name: ReviewUrl
+  type: STRING
+  default: https://review.example.com/shots/sh010
+steps:
+- name: Review
+  approval:
+    message: |
+      Check the preview frames.
+    links:
+    - label: Preview frames
+      parameter: OutputDir
+      subpath: preview
+    - label: Output directory
+      parameter: OutputDir
+    - label: Review page
+      url: "{{Param.ReviewUrl}}"
+    - label: Docs
+      url: https://example.com/docs
+    expiresAfterSeconds: 259200
+    onReject: FAIL

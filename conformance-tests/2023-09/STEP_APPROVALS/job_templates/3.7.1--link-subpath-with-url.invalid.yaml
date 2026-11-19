@@ -1,0 +1,13 @@
+# Template Schemas §3.7.1: subpath may be given only with parameter.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    links:
+    - label: Url
+      url: https://example.com
+      subpath: preview

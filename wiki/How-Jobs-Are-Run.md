@@ -122,6 +122,149 @@ have specific value(s) of the attribute for it to be scheduled to the Worker Hos
 Tasks run on a host that is in the `"linux"` or `"macos"` family of operating systems, or that a host has the shared
 filesystems `"movie-A"`, `"shared-assets"`, and `"software"` all mounted.
 
+## Step Approvals
+
+*Available with the `STEP_APPROVALS` extension. See
+[`<StepApproval>`](2023-09-Template-Schemas#37-stepapproval).*
+
+Some pipelines have a point where a person, not a program, decides whether work continues. For example, a supervisor
+might look at preview frames before a full-quality render is allowed to use expensive hosts. A Step can express this
+with an `approval`. The Step's Tasks may be scheduled only after a person approves it.
+
+The Job Template says *that* a decision is needed and *what the approver sees*: a message, and optionally some links.
+The render management system decides *who* may make the decision and how they are asked.
+
+```yaml
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: "{{Param.ShotName}}"
+parameterDefinitions:
+- name: ShotName
+  type: STRING
+- name: OutputDir
+  type: PATH
+  objectType: DIRECTORY
+  dataFlow: OUT
+steps:
+- name: PreviewFrames
+  script:
+    actions:
+      onRun:
+        command: render-preview
+        args: ["--output", "{{Param.OutputDir}}/preview"]
+- name: ReviewPreview
+  dependencies:
+  - dependsOn: PreviewFrames
+  approval:
+    message: |
+      Check the preview frames of {{Param.ShotName}} before the final render starts.
+    links:
+    - label: Preview frames
+      parameter: OutputDir
+      subpath: preview
+    expiresAfterSeconds: 259200
+- name: FinalFrames
+  dependencies:
+  - dependsOn: ReviewPreview
+  script:
+    actions:
+      onRun:
+        command: render-final
+        args: ["--output", "{{Param.OutputDir}}/final"]
+```
+
+Here `ReviewPreview` has an `approval` and no `script`. It is an **approval-only Step**: it runs nothing, and it is
+complete once someone approves it. `FinalFrames` depends on it, so the final render waits for the reviewer. A Step can
+also have both an `approval` and a `script`. Its own Tasks then wait for the decision.
+
+### The approval request
+
+When a Step with an `approval` would first become eligible for scheduling, the render management system opens an
+**approval request** for it. That happens once every Step it depends on has fully completed successfully, or when the
+Job becomes eligible to run if the Step has no dependencies. The request is never opened earlier, so the approver can
+look at the output of the Steps that came before.
+
+The message and links are resolved when the Job is created, using the Job's parameter values. A link that names a PATH
+parameter shows the path as it was submitted, without path mapping. The approver is not on a Worker Host, so no Worker
+Host's path mapping rules apply to them.
+
+An approval request is in one of these states:
+
+| State      | Meaning                                                     | Can the Step's Tasks be scheduled? |
+| ---------- | ----------------------------------------------------------- | ---------------------------------- |
+| `WAITING`  | Open, and waiting for someone to decide.                    | No                                 |
+| `APPROVED` | Someone approved it. The approval is in effect.             | Yes                                |
+| `REJECTED` | Someone rejected it.                                        | No                                 |
+| `EXPIRED`  | Nobody decided within `expiresAfterSeconds`.                | No                                 |
+
+For every decision, the render management system records who made it, when, and any comment they left.
+
+### Waiting is a scheduling condition
+
+While a request is `WAITING`, the Step is held back in the same way as a Step whose dependencies haven't finished. No
+**Session** is started and no Worker Host is held, so a request can wait for days at no cost to the farm.
+
+Every way of making the Step's Tasks eligible to run is subject to the approval. That includes a user retrying,
+requeuing or resuming the Tasks, and requeuing or restarting the whole Job. If no approval is in effect, the Tasks stay
+held until one is.
+
+An approval is handled entirely by the render management system. It is not part of a **Session**, and Worker Hosts
+never need to know about it.
+
+### Who may decide
+
+The render management system decides who may approve or reject a request, and through which tool. A decision can't
+come from inside the Job:
+
+* It can't come from a Job Parameter value or from anything a Task outputs.
+* The render management system doesn't accept a decision made with credentials that it gives to the Job, its
+  **Sessions**, or the Worker Hosts that run them.
+
+This rule is what makes an approval different from a Job Parameter that a script checks. With a parameter, the
+person who submits the work approves it themselves.
+
+### Rejection and expiry
+
+If a request is rejected or expires, the Step does not complete successfully. None of its Tasks run, and the Steps
+that depend on it are never scheduled. Expiry never approves. The `expiresAfterSeconds` clock starts when the request
+opens.
+
+A render management system should show a rejected or expired Step differently from a Step whose Tasks failed. If a
+user later retries a rejected or expired Step, a new request opens. The earlier rejection is never turned into an
+approval.
+
+### Approval-only Steps
+
+An approval-only Step runs nothing on a Worker Host, so it has no **Session**. That is also why it can't have
+`stepEnvironments`, `hostRequirements`, `parameterSpace` or `let`. It completes successfully when its request is
+approved, and not before. Having nothing to run does not make it complete.
+
+### When a dependency runs again
+
+An approval is a judgement about specific output. In the example above, the reviewer approved the preview frames that
+existed when they looked. If `PreviewFrames` is requeued afterwards, it produces new frames that nobody has reviewed.
+
+So after a decision, if a Step that the approved Step *directly* depends on stops being complete, the decision is no
+longer in effect:
+
+* Tasks of the approved Step that haven't started are held.
+* Once the dependency completes again, a new request opens with a fresh expiry clock.
+* Tasks that already succeeded are left as they are. Tasks that are running may be allowed to finish or may be
+  interrupted. The render management system documents which it does.
+
+If a user requeues the approved Step itself and its dependencies haven't changed, the approval stays in effect. The
+output that the approver reviewed is still the same.
+
+This rule is stricter than what an ordinary dependency guarantees. A Step that merely depends on a requeued Step isn't
+required to wait for it again.
+
+### Running a Job locally
+
+A local runner such as `openjd run` has no render management system to ask. When it reaches a Step with an approval,
+it shows the message and links and asks at the terminal. It also accepts `--approve-step <StepName>` to approve that
+Step ahead of time. Without a terminal to ask at, an approval that wasn't given ahead of time counts as rejected.
+
 ## Stdout/Stderr Messages
 
 Open Job Description defines some special messages that can be emitted on stdout or stderr as a single line by an

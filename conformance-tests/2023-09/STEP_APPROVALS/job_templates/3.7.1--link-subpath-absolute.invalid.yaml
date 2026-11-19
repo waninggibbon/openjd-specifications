@@ -1,0 +1,17 @@
+# Template Schemas §3.7.1: subpath must be relative.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+parameterDefinitions:
+- name: OutputDir
+  type: PATH
+  default: /mnt/out
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    links:
+    - label: Abs
+      parameter: OutputDir
+      subpath: /etc/passwd

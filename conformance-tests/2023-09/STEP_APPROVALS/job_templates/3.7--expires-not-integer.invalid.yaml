@@ -1,0 +1,10 @@
+# Template Schemas §3.7: expiresAfterSeconds must be an integer.
+specificationVersion: jobtemplate-2023-09
+extensions:
+- STEP_APPROVALS
+name: TestJob
+steps:
+- name: Review
+  approval:
+    message: Approve?
+    expiresAfterSeconds: 600.5
